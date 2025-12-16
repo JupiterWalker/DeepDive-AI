@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DeepDive AI</title>
+    <!-- Update Tailwind to include Typography plugin -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    
+    <!-- Highlight.js Theme (Dark) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gray: {
+                750: '#2d3748',
+                850: '#1a202c',
+                950: '#0d1117',
+              }
+            },
+            typography: (theme) => ({
+              DEFAULT: {
+                css: {
+                  color: theme('colors.gray.100'),
+                  a: {
+                    color: theme('colors.indigo.400'),
+                    '&:hover': {
+                      color: theme('colors.indigo.300'),
+                    },
+                  },
+                  code: {
+                    color: theme('colors.pink.300'),
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    padding: '2px 4px',
+                    borderRadius: '4px',
+                    fontWeight: '400',
+                  },
+                  'code::before': {
+                    content: '""',
+                  },
+                  'code::after': {
+                    content: '""',
+                  },
+                  pre: {
+                    backgroundColor: '#0d1117', // Match app background darker tone
+                    border: '1px solid #30363d',
+                  }
+                },
+              },
+            }),
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Custom Scrollbar for sleek look */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #1f2937; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #4b5563; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #6b7280; 
+      }
+      body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        overflow: hidden; /* Prevent body scroll, handle inside App */
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "uuid": "https://esm.sh/uuid@^13.0.0",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1?bundle",
+    "remark-gfm": "https://esm.sh/remark-gfm@4.0.0?bundle",
+    "rehype-highlight": "https://esm.sh/rehype-highlight@7.0.0?bundle"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
