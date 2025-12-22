@@ -55,7 +55,7 @@ export const ChatColumn: React.FC<ChatColumnProps> = ({
             flex flex-col w-[450px]
             ${column.isCollapsed ? 'h-auto' : 'min-h-[200px]'} 
             rounded-2xl border bg-gray-900 shadow-2xl
-            transition-all duration-300 relative group
+            transition-all duration-300 relative group cursor-default
             ${isActive 
               ? 'border-indigo-500 ring-2 ring-indigo-500/50 shadow-indigo-500/20 z-10' 
               : 'border-gray-700 hover:border-gray-600 opacity-90 hover:opacity-100'
@@ -109,7 +109,7 @@ export const ChatColumn: React.FC<ChatColumnProps> = ({
 
       {/* Messages Area - Hidden if collapsed */}
       {!column.isCollapsed && (
-          <div className="flex-1 p-4 bg-gray-900/95 relative animate-in slide-in-from-top-2 duration-200 pb-8">
+          <div className="flex-1 p-2 bg-gray-900/95 relative animate-in slide-in-from-top-2 duration-200 pb-8">
             {column.messages.length === 0 && (
             <div className="text-center text-gray-600 mt-10 text-xs">
                 <div className="w-8 h-8 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center text-xl grayscale opacity-50">✨</div>

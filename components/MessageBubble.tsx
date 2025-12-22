@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -46,14 +47,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   useEffect(() => {
-    const clearSelection = (e: MouseEvent) => {
+    const clearSelection = (e: Event) => {
       // If clicking inside the tooltip input or buttons, don't clear
       const target = e.target as HTMLElement;
-      if (target.closest('.branch-tooltip')) return;
+      if (target && target.closest && target.closest('.branch-tooltip')) return;
       setSelection(null);
     };
+    
+    // Clear selection on mousedown (click outside) and wheel (scroll/zoom)
     document.addEventListener('mousedown', clearSelection);
-    return () => document.removeEventListener('mousedown', clearSelection);
+    window.addEventListener('wheel', clearSelection);
+    
+    return () => {
+        document.removeEventListener('mousedown', clearSelection);
+        window.removeEventListener('wheel', clearSelection);
+    };
   }, []);
 
   useEffect(() => {
@@ -164,7 +172,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
        return <Tag {...props}>{processedChildren}</Tag>;
     };
 
-    // Apply to common text containers
+    // Apply to common text containers, including headers and tables
     return {
         p: recursiveRenderer,
         li: recursiveRenderer,
@@ -172,23 +180,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         em: recursiveRenderer,
         span: recursiveRenderer,
         blockquote: recursiveRenderer,
+        h1: recursiveRenderer,
+        h2: recursiveRenderer,
+        h3: recursiveRenderer,
+        h4: recursiveRenderer,
+        h5: recursiveRenderer,
+        h6: recursiveRenderer,
+        td: recursiveRenderer,
+        th: recursiveRenderer,
         a: ({node, ...props}: any) => <a target="_blank" rel="noopener noreferrer" {...props} />
     };
   }, [childColumns]);
 
   return (
-    <div className={`flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex w-full mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div 
-        className={`relative max-w-full p-4 rounded-xl text-sm leading-relaxed shadow-lg
+        className={`relative px-3 py-2.5 rounded-xl text-sm leading-relaxed shadow-lg
           ${isUser 
-            ? 'bg-indigo-600 text-white rounded-br-none ml-8' 
-            : 'bg-gray-850 text-gray-100 rounded-bl-none border border-gray-700 shadow-xl mr-8'
+            ? 'bg-indigo-600 text-white rounded-br-none max-w-[85%]' 
+            : 'bg-gray-850 text-gray-100 rounded-bl-none border border-gray-700 shadow-xl max-w-[98%]'
           }`}
       >
         <div 
           ref={textRef}
           onMouseUp={!isUser ? handleMouseUp : undefined}
-          className="prose prose-invert prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+          className="prose prose-invert prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 cursor-text"
         >
           {isUser ? (
              <div className="whitespace-pre-wrap font-sans">{message.text}</div>
@@ -203,10 +219,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
         </div>
         
-        {/* Tooltip */}
-        {selection && !isUser && (
+        {/* Tooltip - Using Portal to render at body level to avoid Transform clipping/positioning issues */}
+        {selection && !isUser && createPortal(
           <div 
-            className="branch-tooltip fixed z-50 transform -translate-x-1/2 -translate-y-full mb-2 flex flex-col items-center animate-in fade-in zoom-in duration-200"
+            className="branch-tooltip fixed z-[9999] transform -translate-x-1/2 -translate-y-full mb-2 flex flex-col items-center animate-in fade-in zoom-in duration-200"
             style={{ left: selection.x, top: selection.y - 12 }}
             onMouseDown={(e) => e.stopPropagation()} 
           >
@@ -255,7 +271,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
             {/* Arrow */}
             <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 absolute left-1/2 -translate-x-1/2 bottom-[-6px]"></div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>
