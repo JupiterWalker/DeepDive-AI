@@ -69,7 +69,7 @@ export const streamGeminiResponse = async (
   columns: Column[],
   onChunk: (text: string) => void
 ) => {
-  const model = 'gemini-2.5-flash';
+  const model = 'gemini-3-flash-preview';
   
   // Build history excluding the new user message we are about to send
   const history = buildHistoryForColumn(targetColumnId, columns);

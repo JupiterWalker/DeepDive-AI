@@ -1,25 +1,31 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { Message } from '../types';
+import { Message, Column } from '../types';
 
 interface MessageBubbleProps {
   message: Message;
   columnId: string;
-  onBranch: (text: string, messageId: string) => void;
+  onBranch: (text: string, messageId: string, customPrompt?: string) => void;
   isLatestModel: boolean;
+  childColumns?: Column[]; // Columns that branched off from this message
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ 
   message, 
   columnId, 
   onBranch,
-  isLatestModel
+  isLatestModel,
+  childColumns = []
 }) => {
   const [selection, setSelection] = useState<{ x: number, y: number, text: string } | null>(null);
+  const [inputMode, setInputMode] = useState(false);
+  const [customQuery, setCustomQuery] = useState('');
   const textRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
+  // Handle text selection
   const handleMouseUp = () => {
     const windowSelection = window.getSelection();
     if (!windowSelection || windowSelection.rangeCount === 0) return;
@@ -29,26 +35,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       const range = windowSelection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Calculate position relative to viewport to position the tooltip
       setSelection({
         x: rect.left + (rect.width / 2),
-        y: rect.top, // Position above the text
+        y: rect.top,
         text: text
       });
-    } else {
-      setSelection(null);
+      setInputMode(false);
+      setCustomQuery('');
     }
   };
 
-  // Clear selection if clicking elsewhere
   useEffect(() => {
-    const clearSelection = () => setSelection(null);
+    const clearSelection = (e: MouseEvent) => {
+      // If clicking inside the tooltip input or buttons, don't clear
+      const target = e.target as HTMLElement;
+      if (target.closest('.branch-tooltip')) return;
+      setSelection(null);
+    };
     document.addEventListener('mousedown', clearSelection);
     return () => document.removeEventListener('mousedown', clearSelection);
   }, []);
 
-  const handleBranchClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent clearing selection immediately
+  useEffect(() => {
+    if (inputMode && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [inputMode]);
+
+  const handleDeepDive = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (selection) {
       onBranch(selection.text, message.id);
       setSelection(null);
@@ -56,64 +71,190 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   };
 
+  const handleCustomAskSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selection && customQuery.trim()) {
+      onBranch(selection.text, message.id, customQuery);
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
   const isUser = message.role === 'user';
 
+  // Custom renderer logic to highlight snippets recursively
+  const components = useMemo(() => {
+    if (childColumns.length === 0) return undefined;
+
+    const processText = (text: string): React.ReactNode[] => {
+      if (!text) return [text];
+      
+      // Find all matches
+      const matches: {start: number, end: number, colId: string}[] = [];
+      
+      childColumns.forEach(col => {
+          if (!col.contextSnippet) return;
+          const snippet = col.contextSnippet.trim();
+          if (!snippet) return;
+
+          // Simple substring match
+          let idx = text.indexOf(snippet);
+          while (idx !== -1) {
+             // Ensure we don't already have an overlapping match (greedy, first come first serve for MVP)
+             const isOverlapping = matches.some(m => 
+                 (idx >= m.start && idx < m.end) || (idx + snippet.length > m.start && idx + snippet.length <= m.end)
+             );
+             
+             if (!isOverlapping) {
+                 matches.push({
+                     start: idx,
+                     end: idx + snippet.length,
+                     colId: col.id
+                 });
+             }
+             idx = text.indexOf(snippet, idx + 1);
+          }
+      });
+      
+      if (matches.length === 0) return [text];
+      
+      matches.sort((a, b) => a.start - b.start);
+      
+      const parts: React.ReactNode[] = [];
+      let cursor = 0;
+      
+      matches.forEach(match => {
+          if (match.start > cursor) {
+              parts.push(text.slice(cursor, match.start));
+          }
+          
+          parts.push(
+              <span 
+                  key={match.colId} 
+                  id={`source-${match.colId}`}
+                  className="source-highlight"
+              >
+                  {text.slice(match.start, match.end)}
+              </span>
+          );
+          cursor = match.end;
+      });
+      
+      if (cursor < text.length) {
+          parts.push(text.slice(cursor));
+      }
+      
+      return parts;
+    };
+
+    const recursiveRenderer = ({ node, children, ...props }: any) => {
+       const Tag = node.tagName as any;
+       
+       // Process children recursively
+       const processedChildren = React.Children.map(children, (child) => {
+           if (typeof child === 'string') {
+               return processText(child);
+           }
+           // If child is a React element (e.g. from nested markdown), it's opaque here in 'children' array usually?
+           // Actually ReactMarkdown passes already-rendered children. 
+           // We apply the renderer to all container types so it flows down.
+           return child;
+       });
+
+       return <Tag {...props}>{processedChildren}</Tag>;
+    };
+
+    // Apply to common text containers
+    return {
+        p: recursiveRenderer,
+        li: recursiveRenderer,
+        strong: recursiveRenderer,
+        em: recursiveRenderer,
+        span: recursiveRenderer,
+        blockquote: recursiveRenderer,
+        a: ({node, ...props}: any) => <a target="_blank" rel="noopener noreferrer" {...props} />
+    };
+  }, [childColumns]);
+
   return (
-    <div className={`flex w-full mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div 
-        className={`relative max-w-[90%] p-3 rounded-lg text-sm leading-relaxed shadow-md
+        className={`relative max-w-full p-4 rounded-xl text-sm leading-relaxed shadow-lg
           ${isUser 
-            ? 'bg-blue-600 text-white rounded-br-none' 
-            : 'bg-gray-750 text-gray-100 rounded-bl-none border border-gray-600'
+            ? 'bg-indigo-600 text-white rounded-br-none ml-8' 
+            : 'bg-gray-850 text-gray-100 rounded-bl-none border border-gray-700 shadow-xl mr-8'
           }`}
       >
         <div 
           ref={textRef}
           onMouseUp={!isUser ? handleMouseUp : undefined}
-          // 'prose' and 'prose-invert' give it the dark mode markdown styling.
-          // 'prose-sm' keeps the font size compact.
-          // 'break-words' and 'max-w-none' ensure it handles long content well.
           className="prose prose-invert prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
         >
           {isUser ? (
-             // Simple render for user to avoid rendering their markdown if not desired, 
-             // or keep consistent. Let's keep whitespace-pre-wrap for user messages 
-             // to preserve their formatting exactly as typed, or use markdown if preferred.
-             // Usually user input is just text, but let's treat it as text to match prev behavior.
              <div className="whitespace-pre-wrap font-sans">{message.text}</div>
           ) : (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
-              components={{
-                // Custom overrides if needed, e.g. opening links in new tab
-                a: ({node, ...props}) => <a target="_blank" rel="noopener noreferrer" {...props} />
-              }}
+              components={components}
             >
               {message.text}
             </ReactMarkdown>
           )}
         </div>
         
-        <div className="text-[10px] opacity-50 mt-1 text-right">
-          {new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-        </div>
-
-        {/* Branching Tooltip */}
+        {/* Tooltip */}
         {selection && !isUser && (
           <div 
-            className="fixed z-50 transform -translate-x-1/2 -translate-y-full mb-2"
-            style={{ left: selection.x, top: selection.y - 8 }}
-            onMouseDown={(e) => e.stopPropagation()} // Prevent document mousedown from firing
+            className="branch-tooltip fixed z-50 transform -translate-x-1/2 -translate-y-full mb-2 flex flex-col items-center animate-in fade-in zoom-in duration-200"
+            style={{ left: selection.x, top: selection.y - 12 }}
+            onMouseDown={(e) => e.stopPropagation()} 
           >
-            <button
-              onClick={handleBranchClick}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-lg flex items-center gap-1 animate-in fade-in zoom-in duration-200"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v19"/><path d="M5 8h14"/><path d="M15 11l-3-3-3 3"/></svg>
-              Deep Dive
-            </button>
-            <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-indigo-600 absolute left-1/2 -translate-x-1/2 bottom-[-6px]"></div>
+            <div className="bg-gray-900 border border-gray-600 rounded-lg shadow-2xl p-1.5 flex items-center gap-1">
+              {!inputMode ? (
+                <>
+                  <button
+                    onClick={handleDeepDive}
+                    className="hover:bg-indigo-600 text-gray-200 hover:text-white text-xs font-medium py-1.5 px-3 rounded-md transition-colors flex items-center gap-1.5"
+                  >
+                    <span className="text-indigo-400 group-hover:text-white">✨</span> Deep Dive
+                  </button>
+                  <div className="w-[1px] h-4 bg-gray-700 mx-0.5"></div>
+                  <button
+                    onClick={() => setInputMode(true)}
+                    className="hover:bg-gray-700 text-gray-200 text-xs font-medium py-1.5 px-3 rounded-md transition-colors flex items-center gap-1.5"
+                  >
+                    <span>💬</span> Ask...
+                  </button>
+                </>
+              ) : (
+                <form onSubmit={handleCustomAskSubmit} className="flex items-center gap-1">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={customQuery}
+                    onChange={(e) => setCustomQuery(e.target.value)}
+                    placeholder="Ask about this..."
+                    className="bg-gray-800 text-white text-xs border border-gray-600 rounded px-2 py-1 outline-none focus:border-indigo-500 w-48"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white p-1 rounded transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputMode(false)}
+                    className="text-gray-400 hover:text-white p-1"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  </button>
+                </form>
+              )}
+            </div>
+            {/* Arrow */}
+            <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 absolute left-1/2 -translate-x-1/2 bottom-[-6px]"></div>
           </div>
         )}
       </div>

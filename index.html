@@ -62,7 +62,7 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #1f2937; 
+        background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
         background: #4b5563; 
@@ -72,9 +72,48 @@
         background: #6b7280; 
       }
       body {
+        background-color: #f8fafc; /* Light bg for potential dot pattern visibility if needed, but overridden by dark theme */
         background-color: #0f172a;
         color: #e2e8f0;
-        overflow: hidden; /* Prevent body scroll, handle inside App */
+        overflow: hidden; 
+      }
+      
+      /* Dot Pattern Background */
+      .bg-dot-pattern {
+        background-image: radial-gradient(#334155 1px, transparent 1px);
+        background-size: 24px 24px;
+      }
+
+      /* Connector Lines */
+      .connector-path {
+        fill: none;
+        stroke: #6366f1; /* Indigo-500 */
+        stroke-width: 2px;
+        stroke-linecap: round;
+        pointer-events: none;
+        opacity: 0.6;
+        transition: all 0.3s ease;
+      }
+      
+      /* Connector Dots */
+      .connector-dot {
+        fill: #818cf8; /* Indigo-400 */
+        stroke: #1e1b4b; /* Indigo-950 */
+        stroke-width: 2px;
+        transition: all 0.3s ease;
+      }
+
+      /* Highlighted Source Text */
+      .source-highlight {
+        background-color: rgba(99, 102, 241, 0.2); /* Indigo tint */
+        border-bottom: 2px solid #6366f1;
+        cursor: pointer;
+        border-radius: 2px;
+        padding: 0 2px;
+        transition: background-color 0.2s;
+      }
+      .source-highlight:hover {
+        background-color: rgba(99, 102, 241, 0.4);
       }
     </style>
   <script type="importmap">

@@ -14,6 +14,7 @@ export interface Column {
   messages: Message[];
   inputValue: string;
   isThinking: boolean;
+  isCollapsed: boolean;
 }
 
 export interface BranchRequest {

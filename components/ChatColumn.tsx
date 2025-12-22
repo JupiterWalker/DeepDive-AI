@@ -1,132 +1,159 @@
 import React, { useRef, useEffect } from 'react';
-import { Column, Message } from '../types';
+import { Column } from '../types';
 import { MessageBubble } from './MessageBubble';
 
 interface ChatColumnProps {
   column: Column;
+  childColumns: Column[]; // Pass all columns to find children of this column
   isActive: boolean;
-  onSendMessage: (columnId: string, text: string) => void;
-  onInputChange: (columnId: string, value: string) => void;
-  onBranch: (columnId: string, messageId: string, text: string) => void;
+  onBranch: (columnId: string, messageId: string, text: string, customPrompt?: string) => void;
   onClose?: (columnId: string) => void;
+  onSelect: (columnId: string) => void;
+  onScroll?: () => void;
+  onHeightChange?: (id: string, height: number) => void;
+  onToggleCollapse: (columnId: string) => void;
+  onHeaderMouseDown: (e: React.MouseEvent, columnId: string) => void;
 }
 
 export const ChatColumn: React.FC<ChatColumnProps> = ({
   column,
+  childColumns,
   isActive,
-  onSendMessage,
-  onInputChange,
   onBranch,
-  onClose
+  onClose,
+  onSelect,
+  onScroll,
+  onHeightChange,
+  onToggleCollapse,
+  onHeaderMouseDown
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Find which columns branch off immediately from this one
+  const directChildren = childColumns.filter(c => c.parentId === column.id);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [column.messages, column.isThinking]);
-
-  // Focus input when column becomes active
-  useEffect(() => {
-    if (isActive && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isActive]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!column.inputValue.trim() || column.isThinking) return;
-    onSendMessage(column.id, column.inputValue);
-  };
+    if (!containerRef.current || !onHeightChange) return;
+    
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        onHeightChange(column.id, entry.contentRect.height);
+      }
+    });
+    
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [column.id, onHeightChange, column.isCollapsed]);
 
   return (
     <div 
-      className={`
-        flex-shrink-0 w-[380px] h-full flex flex-col 
-        border-r border-gray-700 bg-gray-900 
-        transition-opacity duration-300
-        ${isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'}
-      `}
+        ref={containerRef}
+        id={`column-${column.id}`}
+        onClick={() => onSelect(column.id)}
+        className={`
+            flex flex-col w-[450px]
+            ${column.isCollapsed ? 'h-auto' : 'min-h-[200px]'} 
+            rounded-2xl border bg-gray-900 shadow-2xl
+            transition-all duration-300 relative group
+            ${isActive 
+              ? 'border-indigo-500 ring-2 ring-indigo-500/50 shadow-indigo-500/20 z-10' 
+              : 'border-gray-700 hover:border-gray-600 opacity-90 hover:opacity-100'
+            }
+        `}
     >
-      {/* Header */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-gray-800 bg-gray-850">
-        <div className="flex flex-col overflow-hidden">
-            <h2 className="font-semibold text-gray-200 truncate" title={column.title}>
-            {column.title || "Main Thread"}
-            </h2>
-            {column.contextSnippet && (
-                <span className="text-[10px] text-indigo-400 truncate flex items-center gap-1">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-                    {column.contextSnippet}
-                </span>
-            )}
+      {/* Header - Draggable Area */}
+      <div 
+        className={`
+            h-12 px-4 flex items-center justify-between border-b backdrop-blur-sm cursor-move
+            ${column.isCollapsed ? 'rounded-2xl border-transparent' : 'rounded-t-2xl'}
+            ${isActive ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-gray-850/50 border-gray-800'}
+        `}
+        onMouseDown={(e) => onHeaderMouseDown(e, column.id)}
+        onDoubleClick={() => onToggleCollapse(column.id)}
+      >
+        <div className="flex items-center gap-3 overflow-hidden flex-1 pointer-events-none">
+             <button 
+                onClick={(e) => { e.stopPropagation(); onToggleCollapse(column.id); }}
+                className="text-gray-400 hover:text-white transition-colors pointer-events-auto"
+             >
+                {column.isCollapsed ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+                )}
+             </button>
+
+            <div className="flex flex-col overflow-hidden">
+                <h2 className={`font-semibold truncate text-sm ${isActive ? 'text-white' : 'text-gray-300'}`} title={column.title}>
+                {column.title || "New Thread"}
+                </h2>
+                {column.contextSnippet && !column.isCollapsed && (
+                    <span className="text-[10px] text-indigo-400 truncate flex items-center gap-1 opacity-90">
+                    <span className="w-1 h-1 rounded-full bg-indigo-500 inline-block"></span>
+                        From: "{column.contextSnippet}"
+                    </span>
+                )}
+            </div>
         </div>
+        
         {onClose && (
           <button 
-            onClick={() => onClose(column.id)}
-            className="text-gray-500 hover:text-red-400 p-1"
+            onClick={(e) => { e.stopPropagation(); onClose(column.id); }}
+            className="text-gray-500 hover:text-red-400 p-1.5 hover:bg-white/5 rounded-full transition-colors ml-2 pointer-events-auto"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         )}
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        {column.messages.length === 0 && (
-          <div className="text-center text-gray-500 mt-10 text-sm">
-            {column.parentId 
-              ? "Start discussing this topic..." 
-              : "Start a conversation..."}
-          </div>
-        )}
-        
-        {column.messages.map((msg) => (
-          <MessageBubble 
-            key={msg.id} 
-            message={msg} 
-            columnId={column.id}
-            onBranch={(text, msgId) => onBranch(column.id, msgId, text)}
-            isLatestModel={msg.role === 'model' && msg === column.messages[column.messages.length - 1]}
-          />
-        ))}
+      {/* Messages Area - Hidden if collapsed */}
+      {!column.isCollapsed && (
+          <div className="flex-1 p-4 bg-gray-900/95 relative animate-in slide-in-from-top-2 duration-200 pb-8">
+            {column.messages.length === 0 && (
+            <div className="text-center text-gray-600 mt-10 text-xs">
+                <div className="w-8 h-8 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center text-xl grayscale opacity-50">✨</div>
+                {column.parentId 
+                ? "Thread started..." 
+                : "Start a conversation..."}
+            </div>
+            )}
+            
+            {column.messages.map((msg) => (
+            <MessageBubble 
+                key={msg.id} 
+                message={msg} 
+                columnId={column.id}
+                onBranch={(text, msgId, customPrompt) => onBranch(column.id, msgId, text, customPrompt)}
+                isLatestModel={msg.role === 'model' && msg === column.messages[column.messages.length - 1]}
+                childColumns={directChildren.filter(c => c.parentMessageId === msg.id)}
+            />
+            ))}
 
-        {column.isThinking && (
-          <div className="flex items-center gap-2 text-gray-400 text-xs ml-2 mb-4 animate-pulse">
-            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
-            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce delay-75"></div>
-            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce delay-150"></div>
-            Thinking...
+            {column.isThinking && (
+            <div className="flex items-center gap-2 text-gray-400 text-xs ml-2 mb-4">
+                <div className="flex space-x-1">
+                    <div className="w-1 bg-indigo-500 rounded-full animate-bounce h-1"></div>
+                    <div className="w-1 bg-indigo-500 rounded-full animate-bounce delay-75 h-1"></div>
+                    <div className="w-1 bg-indigo-500 rounded-full animate-bounce delay-150 h-1"></div>
+                </div>
+                Thinking...
+            </div>
+            )}
+            <div ref={messagesEndRef} />
+            
+            {/* Bottom Collapse Button */}
+            <div className={`absolute bottom-0 left-0 h-4 w-full rounded-b-2xl flex items-center justify-center transition-all duration-300 ${isActive ? 'bg-indigo-900/10' : 'bg-transparent'}`}>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onToggleCollapse(column.id); }}
+                    className="absolute -bottom-3 bg-gray-800 hover:bg-indigo-600 border border-gray-700 hover:border-indigo-500 text-gray-400 hover:text-white rounded-full p-1 shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                    title="Collapse"
+                >
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+                </button>
+            </div>
           </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input Area */}
-      <div className="p-4 bg-gray-850 border-t border-gray-800">
-        <form onSubmit={handleSubmit} className="relative">
-          <input
-            ref={inputRef}
-            type="text"
-            value={column.inputValue}
-            onChange={(e) => onInputChange(column.id, e.target.value)}
-            placeholder="Type a message..."
-            className="w-full bg-gray-750 text-white border border-gray-600 rounded-full py-3 px-4 pr-12 text-sm focus:outline-none focus:border-indigo-500 transition-colors placeholder-gray-500"
-            disabled={column.isThinking}
-          />
-          <button
-            type="submit"
-            disabled={!column.inputValue.trim() || column.isThinking}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-          </button>
-        </form>
-      </div>
+      )}
     </div>
   );
 };
