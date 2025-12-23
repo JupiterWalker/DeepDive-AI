@@ -172,10 +172,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
        return <Tag {...props}>{processedChildren}</Tag>;
     };
 
-    // Apply to common text containers, including headers and tables
+    // Apply to common text containers, including headers, tables, lists, and code blocks
     return {
         p: recursiveRenderer,
         li: recursiveRenderer,
+        ul: recursiveRenderer,
+        ol: recursiveRenderer,
         strong: recursiveRenderer,
         em: recursiveRenderer,
         span: recursiveRenderer,
@@ -188,6 +190,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         h6: recursiveRenderer,
         td: recursiveRenderer,
         th: recursiveRenderer,
+        code: recursiveRenderer,
+        pre: recursiveRenderer,
         a: ({node, ...props}: any) => <a target="_blank" rel="noopener noreferrer" {...props} />
     };
   }, [childColumns]);
